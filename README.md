@@ -1,6 +1,9 @@
 # `@react-native-community/cameraroll`
 
-[![CircleCI Status](https://img.shields.io/circleci/project/github/react-native-community/react-native-cameraroll/master.svg)](https://circleci.com/gh/react-native-community/workflows/react-native-cameraroll/tree/master) ![Supports Android and iOS](https://img.shields.io/badge/platforms-android%20|%20ios-lightgrey.svg) ![MIT License](https://img.shields.io/npm/l/@react-native-community/cameraroll.svg)
+[![CircleCI Status][circle-ci-badge]][circle-ci]
+![Supports Android and iOS][supported-os-badge]
+![MIT License][license-badge]
+[![Lean Core Badge][lean-core-badge]][lean-core-issue]
 
 ## Getting started
 
@@ -8,7 +11,7 @@
 
 ### Mostly automatic installation
 
-`$ react-native link @react-native-community/cameraroll`
+`$ react-native link @react-native-community/cameraroll && cd ios && pod install`
 
 ### Manual installation
 
@@ -73,6 +76,7 @@ On Android permission is required to read the external storage. Add below line t
 * [`saveToCameraRoll`](#savetocameraroll)
 * [`save`](#save)
 * [`getPhotos`](#getphotos)
+* [`deletePhotos`](#deletephotos)
 
 ---
 
@@ -129,6 +133,7 @@ Returns a Promise with photo identifier objects from the local camera roll of th
 
 * `first` : {number} : The number of photos wanted in reverse order of the photo application (i.e. most recent first for SavedPhotos). Required.
 * `after` : {string} : A cursor that matches `page_info { end_cursor }` returned from a previous call to `getPhotos`.
+* `from`  : {string} : Timestamp of photos from this timestamp // Android only
 * `groupTypes` : {string} : Specifies which group types to filter the results to. Valid values are:
   * `Album`
   * `All` // default
@@ -210,3 +215,31 @@ render() {
  );
 }
 ```  
+---
+### `deletePhotos()`
+
+```javascript
+CameraRoll.deletePhotos([uri]);
+```
+
+Requests deletion of photos in the camera roll.
+
+On Android, the uri must be a local image or video URI, such as `"file:///sdcard/img.png"`.
+
+On iOS, the uri can be any image URI (including local, remote asset-library and base64 data URIs) or a local video file URI. The user is presented with a dialog box that shows them the asset(s) and asks them to confirm deletion. This is not able to be bypassed as per Apple Developer guidelines. 
+
+Returns a Promise which will resolve when the deletion request is completed, or reject if there is a problem during the deletion. On iOS the user is able to cancel the deletion request, which causes a rejection, while on Android the rejection will be due to a system error.
+
+**Parameters:**
+
+| Name | Type                   | Required | Description                                                |
+| ---- | ---------------------- | -------- | ---------------------------------------------------------- |
+| uri  | string                 | Yes      | See above.                                                 |
+
+
+[circle-ci-badge]:https://img.shields.io/circleci/project/github/react-native-community/react-native-cameraroll/master.svg?style=flat-square
+[circle-ci]:https://circleci.com/gh/react-native-community/workflows/react-native-cameraroll/tree/master
+[supported-os-badge]:https://img.shields.io/badge/platforms-android%20|%20ios-lightgrey.svg?style=flat-square
+[license-badge]:https://img.shields.io/npm/l/@react-native-community/cameraroll.svg?style=flat-square
+[lean-core-badge]: https://img.shields.io/badge/Lean%20Core-Extracted-brightgreen.svg?style=flat-square
+[lean-core-issue]: https://github.com/facebook/react-native/issues/23313

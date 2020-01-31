@@ -230,6 +230,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
   public void getPhotos(final ReadableMap params, final Promise promise) {
     int first = params.getInt("first");
     String after = params.hasKey("after") ? params.getString("after") : null;
+    String from = params.hasKey("from") ? params.getString("from") : null;
     String groupName = params.hasKey("groupName") ? params.getString("groupName") : null;
     Boolean includeExifTimestamp = params.hasKey("includeExifTimestamp") ? params.getBoolean("includeExifTimestamp") : null;
     String assetType = params.hasKey("assetType") ? params.getString("assetType") : ASSET_TYPE_PHOTOS;
@@ -241,6 +242,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
           getReactApplicationContext(),
           first,
           after,
+          from,
           groupName,
           mimeTypes,
           assetType,
@@ -253,6 +255,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     private final Context mContext;
     private final int mFirst;
     private final @Nullable String mAfter;
+    private final @Nullable String mFrom;
     private final @Nullable String mGroupName;
     private final @Nullable ReadableArray mMimeTypes;
     private final Boolean mIncludeExifTimestamp;
@@ -263,6 +266,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         ReactContext context,
         int first,
         @Nullable String after,
+        @Nullable from,
         @Nullable String groupName,
         @Nullable ReadableArray mimeTypes,
         String assetType,
@@ -272,6 +276,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       mContext = context;
       mFirst = first;
       mAfter = after;
+      mFrom = from;
       mGroupName = groupName;
       mMimeTypes = mimeTypes;
       mPromise = promise;
@@ -283,6 +288,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     protected void doInBackgroundGuarded(Void... params) {
       StringBuilder selection = new StringBuilder("1");
       List<String> selectionArgs = new ArrayList<>();
+
+      if (!TextUtils.isEmpty(mFrom)) {	
+        selection.append(" AND " + SELECTION_DATE_TAKEN);	
+        selectionArgs.add(mFrom);	
+      }
+
       if (!TextUtils.isEmpty(mGroupName)) {
         selection.append(" AND " + SELECTION_BUCKET);
         selectionArgs.add(mGroupName);

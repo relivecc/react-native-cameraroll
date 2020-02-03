@@ -266,7 +266,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         ReactContext context,
         int first,
         @Nullable String after,
-        @Nullable from,
+        @Nullable String from,
         @Nullable String groupName,
         @Nullable ReadableArray mimeTypes,
         String assetType,

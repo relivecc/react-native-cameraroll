@@ -78,6 +78,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     Images.Media.MIME_TYPE,
     Images.Media.BUCKET_DISPLAY_NAME,
     Images.Media.DATE_TAKEN,
+    Images.Media.DATE_ADDED,
     MediaStore.MediaColumns.WIDTH,
     MediaStore.MediaColumns.HEIGHT,
     Images.Media.LONGITUDE,
@@ -388,7 +389,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     int idIndex = media.getColumnIndex(Images.Media._ID);
     int mimeTypeIndex = media.getColumnIndex(Images.Media.MIME_TYPE);
     int groupNameIndex = media.getColumnIndex(Images.Media.BUCKET_DISPLAY_NAME);
-    int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_TAKEN);
+    int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_ADDED);
     int widthIndex = media.getColumnIndex(MediaStore.MediaColumns.WIDTH);
     int heightIndex = media.getColumnIndex(MediaStore.MediaColumns.HEIGHT);
     int longitudeIndex = media.getColumnIndex(Images.Media.LONGITUDE);

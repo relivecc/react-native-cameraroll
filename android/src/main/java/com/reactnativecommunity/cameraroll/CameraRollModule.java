@@ -425,7 +425,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       int dateTakenIndex) {
     node.putString("type", media.getString(mimeTypeIndex));
     node.putString("group_name", media.getString(groupNameIndex));
-    node.putDouble("timestamp", media.getLong(dateTakenIndex) / 1000d);
+    node.putDouble("timestamp", media.getLong(dateTakenIndex));
   }
 
   private static boolean putImageInfo(

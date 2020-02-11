@@ -83,7 +83,8 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     MediaStore.MediaColumns.HEIGHT,
     Images.Media.LONGITUDE,
     Images.Media.LATITUDE,
-    MediaStore.MediaColumns.DATA
+    MediaStore.MediaColumns.DATA,
+    "MAX("+ Images.Media.DATE_TAKEN + "," + Images.Media.DATE_ADDED +") as date"
   };
 
   private static final String SELECTION_BUCKET = Images.Media.BUCKET_DISPLAY_NAME + " = ?";
@@ -345,7 +346,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
             PROJECTION,
             selection.toString(),
             selectionArgs.toArray(new String[selectionArgs.size()]),
-            Images.Media.DATE_ADDED + " DESC, " + Images.Media.DATE_MODIFIED + " DESC");
+            "date" + " DESC, " + Images.Media.DATE_MODIFIED + " DESC");
         if (media == null) {
           mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get media");
         } else {

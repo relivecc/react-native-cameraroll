@@ -85,11 +85,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     Images.Media.LONGITUDE,
     Images.Media.LATITUDE,
     MediaStore.MediaColumns.DATA,
-    "MIN("+ Images.Media.DATE_TAKEN + "," + Images.Media.DATE_ADDED +") as " + CameraRollModule.DATE_USED
+    "MIN("+ Images.Media.DATE_TAKEN + "," + Images.Media.DATE_ADDED +") as " + DATE_USED
   };
 
   private static final String SELECTION_BUCKET = Images.Media.BUCKET_DISPLAY_NAME + " = ?";
   private static final String SELECTION_DATE_TAKEN = Images.Media.DATE_TAKEN + " < ?";
+  private static final String SELECTION_DATE_USED = DATE_USED + " < ?";
 
   public CameraRollModule(ReactApplicationContext reactContext) {
     super(reactContext);
@@ -293,7 +294,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       List<String> selectionArgs = new ArrayList<>();
 
       if (!TextUtils.isEmpty(mFrom)) {	
-        selection.append(" AND " + SELECTION_DATE_TAKEN);	
+        selection.append(" AND " + SELECTION_DATE_USED);	
         selectionArgs.add(mFrom);	
       }
 
@@ -347,7 +348,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
             PROJECTION,
             selection.toString(),
             selectionArgs.toArray(new String[selectionArgs.size()]),
-            CameraRollModule.DATE_USED + " DESC, " + Images.Media.DATE_MODIFIED + " DESC");
+            DATE_USED + " DESC, " + Images.Media.DATE_MODIFIED + " DESC");
         if (media == null) {
           mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get media");
         } else {
@@ -391,13 +392,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     int idIndex = media.getColumnIndex(Images.Media._ID);
     int mimeTypeIndex = media.getColumnIndex(Images.Media.MIME_TYPE);
     int groupNameIndex = media.getColumnIndex(Images.Media.BUCKET_DISPLAY_NAME);
-    // int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_ADDED);
     int widthIndex = media.getColumnIndex(MediaStore.MediaColumns.WIDTH);
     int heightIndex = media.getColumnIndex(MediaStore.MediaColumns.HEIGHT);
     int longitudeIndex = media.getColumnIndex(Images.Media.LONGITUDE);
     int latitudeIndex = media.getColumnIndex(Images.Media.LATITUDE);
     int dataIndex = media.getColumnIndex(MediaStore.MediaColumns.DATA);
-    int dateUsedIndex = media.getColumnIndex(CameraRollModule.DATE_USED);
+    int dateUsedIndex = media.getColumnIndex(DATE_USED);
 
     for (int i = 0; i < limit && !media.isAfterLast(); i++) {
       WritableMap edge = new WritableNativeMap();

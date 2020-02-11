@@ -72,6 +72,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
   private static final String ASSET_TYPE_PHOTOS = "Photos";
   private static final String ASSET_TYPE_VIDEOS = "Videos";
   private static final String ASSET_TYPE_ALL = "All";
+  private static final String DATE_USED = "date_used";
 
   private static final String[] PROJECTION = {
     Images.Media._ID,
@@ -84,7 +85,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     Images.Media.LONGITUDE,
     Images.Media.LATITUDE,
     MediaStore.MediaColumns.DATA,
-    "MIN("+ Images.Media.DATE_TAKEN + "," + Images.Media.DATE_ADDED +") as date"
+    "MIN("+ Images.Media.DATE_TAKEN + "," + Images.Media.DATE_ADDED +") as " + CameraRollModule.DATE_USED
   };
 
   private static final String SELECTION_BUCKET = Images.Media.BUCKET_DISPLAY_NAME + " = ?";
@@ -346,7 +347,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
             PROJECTION,
             selection.toString(),
             selectionArgs.toArray(new String[selectionArgs.size()]),
-            "date" + " DESC, " + Images.Media.DATE_MODIFIED + " DESC");
+            CameraRollModule.DATE_USED + " DESC, " + Images.Media.DATE_MODIFIED + " DESC");
         if (media == null) {
           mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get media");
         } else {
@@ -390,12 +391,13 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     int idIndex = media.getColumnIndex(Images.Media._ID);
     int mimeTypeIndex = media.getColumnIndex(Images.Media.MIME_TYPE);
     int groupNameIndex = media.getColumnIndex(Images.Media.BUCKET_DISPLAY_NAME);
-    int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_ADDED);
+    // int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_ADDED);
     int widthIndex = media.getColumnIndex(MediaStore.MediaColumns.WIDTH);
     int heightIndex = media.getColumnIndex(MediaStore.MediaColumns.HEIGHT);
     int longitudeIndex = media.getColumnIndex(Images.Media.LONGITUDE);
     int latitudeIndex = media.getColumnIndex(Images.Media.LATITUDE);
     int dataIndex = media.getColumnIndex(MediaStore.MediaColumns.DATA);
+    int dateUsedIndex = media.getColumnIndex(CameraRollModule.DATE_USED);
 
     for (int i = 0; i < limit && !media.isAfterLast(); i++) {
       WritableMap edge = new WritableNativeMap();
@@ -403,7 +405,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       boolean imageInfoSuccess =
           putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, includeExifTimestamp);
       if (imageInfoSuccess) {
-        putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, dateTakenIndex);
+        putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, dateUsedIndex);
         putLocationInfo(media, node, longitudeIndex, latitudeIndex);
 
         edge.putMap("node", node);
@@ -423,10 +425,11 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap node,
       int mimeTypeIndex,
       int groupNameIndex,
-      int dateTakenIndex) {
+      int dateUsedIndex) {
     node.putString("type", media.getString(mimeTypeIndex));
     node.putString("group_name", media.getString(groupNameIndex));
-    node.putDouble("timestamp", media.getLong(dateTakenIndex));
+    Long timestamp = media.getLong(dateUsedIndex);
+    node.putDouble("timestamp", timestamp > 10e10 ? Math.round(timestamp / 1000d) : timestamp);
   }
 
   private static boolean putImageInfo(

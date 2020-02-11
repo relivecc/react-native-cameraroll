@@ -84,7 +84,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     Images.Media.LONGITUDE,
     Images.Media.LATITUDE,
     MediaStore.MediaColumns.DATA,
-    "MAX("+ Images.Media.DATE_TAKEN + "," + Images.Media.DATE_ADDED +") as date"
+    "MIN("+ Images.Media.DATE_TAKEN + "," + Images.Media.DATE_ADDED +") as date"
   };
 
   private static final String SELECTION_BUCKET = Images.Media.BUCKET_DISPLAY_NAME + " = ?";

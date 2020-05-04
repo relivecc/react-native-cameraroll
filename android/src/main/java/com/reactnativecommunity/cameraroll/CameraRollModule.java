@@ -371,7 +371,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         } else {
           try {
             putEdges(resolver, media, response, mFirst, mIncludeExifTimestamp);
-            putPageInfo(media, response, mFirst, !TextUtils.isEmpty(mAfter) ? Integer.parseInt(mAfter) : 0);
+            putPageInfo(media, response, mFirst, !TextUtils.isEmpty(mAfter) ? Long.parseLong(mAfter) : 0);
           } finally {
             media.close();
             mPromise.resolve(response);
@@ -448,13 +448,13 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
 
   }
 
-  private static void putPageInfo(Cursor media, WritableMap response, int limit, int offset) {
+  private static void putPageInfo(Cursor media, WritableMap response, int limit, long offset) {
     WritableMap pageInfo = new WritableNativeMap();
     pageInfo.putBoolean("has_next_page", limit < media.getCount());
     if (limit < media.getCount()) {
       pageInfo.putString(
         "end_cursor",
-        Integer.toString(offset + limit)
+        Long.toString(offset + limit)
       );
     }
     response.putMap("page_info", pageInfo);

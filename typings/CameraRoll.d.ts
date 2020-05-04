@@ -28,6 +28,8 @@ declare namespace CameraRoll {
     assetType?: AssetType;
     mimeTypes?: Array<string>;
     includeExifTimestamp?: boolean;
+    fromTime?: number;
+    toTime?: number;
   }
 
   interface PhotoIdentifier {
@@ -63,6 +65,15 @@ declare namespace CameraRoll {
     };
   }
 
+  interface GetAlbumsParams {
+    assetType?: AssetType;
+  }
+
+  interface Album {
+    title: string;
+    count: number;
+  }
+
   type SaveToCameraRollOptions = {
     type?: 'photo' | 'video' | 'auto',
     album?: string,
@@ -76,7 +87,7 @@ declare namespace CameraRoll {
     /**
      * Delete a photo from the camera roll or media library. photoUris is an array of photo uri's.
      */
-    function deletePhotos(photoUris: Array<string>): void;
+    function deletePhotos(photoUris: Array<string>): Promise<boolean>;
     
     /**
      * Saves the photo or video to the camera roll or photo library.
@@ -93,6 +104,8 @@ declare namespace CameraRoll {
      * roll of the device matching shape defined by `getPhotosReturnChecker`.
      */
     function getPhotos(params: GetPhotosParams): Promise<PhotoIdentifiersPage>;
+
+    function getAlbums(params: GetAlbumsParams): Promise<Album[]>;
 }
 
 export = CameraRoll;

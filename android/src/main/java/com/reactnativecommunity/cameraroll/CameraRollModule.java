@@ -82,8 +82,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     Images.Media.DATE_ADDED,
     MediaStore.MediaColumns.WIDTH,
     MediaStore.MediaColumns.HEIGHT,
-    Images.Media.LONGITUDE,
-    Images.Media.LATITUDE,
     MediaStore.MediaColumns.DATA
   };
 

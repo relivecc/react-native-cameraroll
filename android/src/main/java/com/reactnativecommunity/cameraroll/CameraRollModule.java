@@ -351,15 +351,16 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       ContentResolver resolver = mContext.getContentResolver();
       
       try {
+        // TODO: LIMIT not implemented because passing a limit along with the URI/query does not work in Android 10 and no results are returned. Instead of using offset+limit to paginate, use fromTime/toTime instead.
         // set LIMIT to first + 1 so that we know how to populate page_info
-        String limit = "limit=" + (mFirst + 1);
-
-        if (!TextUtils.isEmpty(mAfter)) {
-          limit = "limit=" + mAfter + "," + (mFirst + 1);
-        }
+        // String limit = "limit=" + (mFirst + 1);
+        //
+        // if (!TextUtils.isEmpty(mAfter)) {
+        //  limit = "limit=" + mAfter + "," + (mFirst + 1);
+        // }
 
         Cursor media = resolver.query(
-            MediaStore.Files.getContentUri("external").buildUpon().encodedQuery(limit).build(),
+            MediaStore.Files.getContentUri("external"),
             PROJECTION,
             selection.toString(),
             selectionArgs.toArray(new String[selectionArgs.size()]),
@@ -369,7 +370,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         } else {
           try {
             putEdges(resolver, media, response, mFirst, mIncludeExifTimestamp);
-            putPageInfo(media, response, mFirst, !TextUtils.isEmpty(mAfter) ? Long.parseLong(mAfter) : 0);
+            putPageInfo(media, response, mFirst, !TextUtils.isEmpty(mAfter) ? Integer.parseInt(mAfter) : 0);
           } finally {
             media.close();
             mPromise.resolve(response);
@@ -446,13 +447,13 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
 
   }
 
-  private static void putPageInfo(Cursor media, WritableMap response, int limit, long offset) {
+  private static void putPageInfo(Cursor media, WritableMap response, int limit, int offset) {
     WritableMap pageInfo = new WritableNativeMap();
     pageInfo.putBoolean("has_next_page", limit < media.getCount());
     if (limit < media.getCount()) {
       pageInfo.putString(
         "end_cursor",
-        Long.toString(offset + limit)
+        Integer.toString(offset + limit)
       );
     }
     response.putMap("page_info", pageInfo);

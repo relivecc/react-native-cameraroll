@@ -18,6 +18,7 @@ import android.media.MediaScannerConnection;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.MediaStore.Images;
@@ -351,16 +352,19 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       ContentResolver resolver = mContext.getContentResolver();
       
       try {
-        // TODO: LIMIT not implemented because passing a limit along with the URI/query does not work in Android 10 and no results are returned. Instead of using offset+limit to paginate, use fromTime/toTime instead.
-        // set LIMIT to first + 1 so that we know how to populate page_info
-        // String limit = "limit=" + (mFirst + 1);
-        //
-        // if (!TextUtils.isEmpty(mAfter)) {
-        //  limit = "limit=" + mAfter + "," + (mFirst + 1);
-        // }
+
+         // set LIMIT to first + 1 so that we know how to populate page_info
+         String limit = "limit=" + (mFirst + 1);
+
+         if (!TextUtils.isEmpty(mAfter)) {
+          limit = "limit=" + mAfter + "," + (mFirst + 1);
+         }
 
         Cursor media = resolver.query(
-            MediaStore.Files.getContentUri("external"),
+            Build.VERSION.SDK_INT >= 29
+              // TODO: Implement LIMIT for all versions. SDK 29 doesn't support LIMIT in URI.
+              ? MediaStore.Files.getContentUri("external")
+              : MediaStore.Files.getContentUri("external").buildUpon().encodedQuery(limit).build(),
             PROJECTION,
             selection.toString(),
             selectionArgs.toArray(new String[selectionArgs.size()]),

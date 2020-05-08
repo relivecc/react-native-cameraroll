@@ -154,7 +154,7 @@ Returns a Promise with photo identifier objects from the local camera roll of th
 | params | object | Yes      | Expects a params with the shape described below. |
 
 * `first` : {number} : The number of photos wanted in reverse order of the photo application (i.e. most recent first for SavedPhotos). Required.
-* `after` : {string} : A cursor that matches `page_info { end_cursor }` returned from a previous call to `getPhotos`. // Not supported on Android SDK 28 or higher devices
+* `after` : {string} : A cursor that matches `page_info { end_cursor }` returned from a previous call to `getPhotos`. // Not supported from Android SDK 29
 * `from`  : {string} : Timestamp of photos from this timestamp // Android only
 * `groupTypes` : {string} : Specifies which group types to filter the results to. Valid values are:
   * `Album`

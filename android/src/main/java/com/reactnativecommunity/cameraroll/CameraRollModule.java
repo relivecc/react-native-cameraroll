@@ -361,7 +361,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
          }
 
         Cursor media = resolver.query(
-            Build.VERSION >= 28
+            Build.VERSION.SDK_INT >= 28
               // TODO: Implement LIMIT for all, devices running SDK 28 or higher don't support this.
               ? MediaStore.Files.getContentUri("external")
               : MediaStore.Files.getContentUri("external").buildUpon().encodedQuery(limit).build(),

@@ -75,6 +75,7 @@ On Android permission is required to read the external storage. Add below line t
 
 * [`saveToCameraRoll`](#savetocameraroll)
 * [`save`](#save)
+* [`getAlbums`](#getalbums)
 * [`getPhotos`](#getphotos)
 * [`deletePhotos`](#deletephotos)
 
@@ -116,6 +117,27 @@ Returns a Promise which will resolve with the new URI.
 | type | enum('photo', 'video') | No       | Overrides automatic detection based on the file extension. |
 
 ---
+### `getAlbums()`
+
+```javascript
+CameraRoll.getAlbums(params);
+```
+Returns a Promise with a list of albums
+
+**Parameters:**
+
+* `assetType` : {string} : Specifies filter on asset type. Valid values are:
+  * `All` // default
+  * `Videos`
+  * `Photos`
+
+**Returns:**
+
+Array of `Album` object
+  * title: {string}
+  * count: {number}
+
+---
 
 ### `getPhotos()`
 
@@ -132,7 +154,7 @@ Returns a Promise with photo identifier objects from the local camera roll of th
 | params | object | Yes      | Expects a params with the shape described below. |
 
 * `first` : {number} : The number of photos wanted in reverse order of the photo application (i.e. most recent first for SavedPhotos). Required.
-* `after` : {string} : A cursor that matches `page_info { end_cursor }` returned from a previous call to `getPhotos`.
+* `after` : {string} : A cursor that matches `page_info { end_cursor }` returned from a previous call to `getPhotos`. // Not supported from Android SDK 29
 * `from`  : {string} : Timestamp of photos from this timestamp // Android only
 * `groupTypes` : {string} : Specifies which group types to filter the results to. Valid values are:
   * `Album`
@@ -149,6 +171,8 @@ Returns a Promise with photo identifier objects from the local camera roll of th
   * `Photos` // default
 * `mimeTypes` : {Array} : Filter by mimetype (e.g. image/jpeg).
 * `includeExifTimestamp`: {boolean} : Include the exif timestamp for the photo // Android only
+* `fromTime` : {timestamp} : Filter from date added.
+* `toTime` : {timestamp} : Filter to date added.
 
 Returns a Promise which when resolved will be of the following shape:
 

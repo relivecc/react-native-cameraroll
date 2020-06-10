@@ -21,7 +21,6 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.MediaStore.Images;
 import android.text.TextUtils;
-import android.media.ExifInterface;
 
 import com.facebook.common.logging.FLog;
 import com.facebook.react.bridge.GuardedAsyncTask;
@@ -48,8 +47,8 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
-import java.text.SimpleDateFormat;	
-import java.text.ParseException;	
+import java.text.SimpleDateFormat;
+import java.text.ParseException;
 import java.util.Date;
 
 import javax.annotation.Nullable;
@@ -381,11 +380,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     for (int i = 0; i < limit && !media.isAfterLast(); i++) {
       WritableMap edge = new WritableNativeMap();
       WritableMap node = new WritableNativeMap();
-      boolean imageInfoSuccess =
-          putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, includeExifTimestamp);
+      ExifInterface exif = getExifInterface(media, dataIndex);
+      boolean imageInfoSuccess = exif != null &&
+          putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, includeExifTimestamp, exif);
       if (imageInfoSuccess) {
         putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, dateTakenIndex);
-        putLocationInfo(media, node, dataIndex);
+        putLocationInfo(media, node, dataIndex, exif);
 
         edge.putMap("node", node);
         edges.pushMap(edge);
@@ -397,6 +397,18 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       media.moveToNext();
     }
     response.putArray("edges", edges);
+  }
+
+  private static ExifInterface getExifInterface(Cursor media, int dataIndex) {
+    Uri photoUri = Uri.parse("file://" + media.getString(dataIndex));
+    File file = new File(media.getString(dataIndex));
+    try {
+      ExifInterface exif = new ExifInterface(file.getPath());
+      return exif;
+    } catch (IOException e) {
+      FLog.e(ReactConstants.TAG, "Could not get exifTimestamp for " + photoUri.toString(), e);
+      return null;
+    }
   }
 
   private static void putBasicNodeInfo(
@@ -419,7 +431,8 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       int heightIndex,
       int dataIndex,
       int mimeTypeIndex,
-      Boolean includeExifTimestamp) {
+      Boolean includeExifTimestamp,
+      ExifInterface exif) {
     WritableMap image = new WritableNativeMap();
     Uri photoUri = Uri.parse("file://" + media.getString(dataIndex));
     File file = new File(media.getString(dataIndex));
@@ -490,16 +503,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     node.putMap("image", image);
     if (includeExifTimestamp) {
       try {
-        ExifInterface exif = new ExifInterface(file.getPath());
         String exifTimestampString = exif.getAttribute("DateTime");
         if (exifTimestampString != null) {
           SimpleDateFormat sdf = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
           Date d = sdf.parse(exifTimestampString);
           node.putDouble("exif_timestamp", d.getTime());
         }
-      } catch (IOException e) {
-        FLog.e(ReactConstants.TAG, "Could not get exifTimestamp for " + photoUri.toString(), e);
-        return false;
       } catch (ParseException e) {
         FLog.e(ReactConstants.TAG, "Could not parse exifTimestamp for " + photoUri.toString(), e);
         return false;
@@ -511,24 +520,20 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
   private static void putLocationInfo(
       Cursor media,
       WritableMap node,
-      int dataIndex) {
-      try {
-        // location details are no longer indexed for privacy reasons using string Media.LATITUDE, Media.LONGITUDE
-        // we manually obtain location metadata using ExifInterface#getLatLong(float[]).
-        // ExifInterface is added in API level 5
-        final ExifInterface exif = new ExifInterface(media.getString(dataIndex));
-        float[] imageCoordinates = new float[2];
-        boolean hasCoordinates = exif.getLatLong(imageCoordinates);
-        if (hasCoordinates) {
-          double longitude = imageCoordinates[1];
-          double latitude = imageCoordinates[0];
-          WritableMap location = new WritableNativeMap();
-          location.putDouble("longitude", longitude);
-          location.putDouble("latitude", latitude);
-          node.putMap("location", location);
-        }
-      } catch (IOException e) {
-        FLog.e(ReactConstants.TAG, "Could not read the metadata", e);
+      int dataIndex,
+      ExifInterface exif) {
+      // location details are no longer indexed for privacy reasons using string Media.LATITUDE, Media.LONGITUDE
+      // we manually obtain location metadata using ExifInterface#getLatLong(float[]).
+      // ExifInterface is added in API level 5
+      float[] imageCoordinates = new float[2];
+      boolean hasCoordinates = exif.getLatLong(imageCoordinates);
+      if (hasCoordinates) {
+        double longitude = imageCoordinates[1];
+        double latitude = imageCoordinates[0];
+        WritableMap location = new WritableNativeMap();
+        location.putDouble("longitude", longitude);
+        location.putDouble("latitude", latitude);
+        node.putMap("location", location);
       }
   }
 }

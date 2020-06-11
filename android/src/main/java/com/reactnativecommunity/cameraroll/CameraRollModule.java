@@ -47,8 +47,8 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
-import java.text.SimpleDateFormat;	
-import java.text.ParseException;	
+import java.text.SimpleDateFormat;
+import java.text.ParseException;
 import java.util.Date;
 
 import javax.annotation.Nullable;
@@ -78,8 +78,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     Images.Media.DATE_TAKEN,
     MediaStore.MediaColumns.WIDTH,
     MediaStore.MediaColumns.HEIGHT,
-    Images.Media.LONGITUDE,
-    Images.Media.LATITUDE,
     MediaStore.MediaColumns.DATA
   };
 
@@ -377,18 +375,17 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_TAKEN);
     int widthIndex = media.getColumnIndex(MediaStore.MediaColumns.WIDTH);
     int heightIndex = media.getColumnIndex(MediaStore.MediaColumns.HEIGHT);
-    int longitudeIndex = media.getColumnIndex(Images.Media.LONGITUDE);
-    int latitudeIndex = media.getColumnIndex(Images.Media.LATITUDE);
     int dataIndex = media.getColumnIndex(MediaStore.MediaColumns.DATA);
 
     for (int i = 0; i < limit && !media.isAfterLast(); i++) {
       WritableMap edge = new WritableNativeMap();
       WritableMap node = new WritableNativeMap();
-      boolean imageInfoSuccess =
-          putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, includeExifTimestamp);
+      ExifInterface exif = getExifInterface(media, dataIndex);
+      boolean imageInfoSuccess = exif != null &&
+          putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, includeExifTimestamp, exif);
       if (imageInfoSuccess) {
         putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, dateTakenIndex);
-        putLocationInfo(media, node, longitudeIndex, latitudeIndex);
+        putLocationInfo(media, node, dataIndex, exif);
 
         edge.putMap("node", node);
         edges.pushMap(edge);
@@ -400,6 +397,18 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       media.moveToNext();
     }
     response.putArray("edges", edges);
+  }
+
+  private static ExifInterface getExifInterface(Cursor media, int dataIndex) {
+    Uri photoUri = Uri.parse("file://" + media.getString(dataIndex));
+    File file = new File(media.getString(dataIndex));
+    try {
+      ExifInterface exif = new ExifInterface(file.getPath());
+      return exif;
+    } catch (IOException e) {
+      FLog.e(ReactConstants.TAG, "Could not get exifTimestamp for " + photoUri.toString(), e);
+      return null;
+    }
   }
 
   private static void putBasicNodeInfo(
@@ -422,7 +431,8 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       int heightIndex,
       int dataIndex,
       int mimeTypeIndex,
-      Boolean includeExifTimestamp) {
+      Boolean includeExifTimestamp,
+      ExifInterface exif) {
     WritableMap image = new WritableNativeMap();
     Uri photoUri = Uri.parse("file://" + media.getString(dataIndex));
     File file = new File(media.getString(dataIndex));
@@ -493,16 +503,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     node.putMap("image", image);
     if (includeExifTimestamp) {
       try {
-        ExifInterface exif = new ExifInterface(file.getPath());
         String exifTimestampString = exif.getAttribute("DateTime");
         if (exifTimestampString != null) {
           SimpleDateFormat sdf = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
           Date d = sdf.parse(exifTimestampString);
           node.putDouble("exif_timestamp", d.getTime());
         }
-      } catch (IOException e) {
-        FLog.e(ReactConstants.TAG, "Could not get exifTimestamp for " + photoUri.toString(), e);
-        return false;
       } catch (ParseException e) {
         FLog.e(ReactConstants.TAG, "Could not parse exifTimestamp for " + photoUri.toString(), e);
         return false;
@@ -514,15 +520,20 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
   private static void putLocationInfo(
       Cursor media,
       WritableMap node,
-      int longitudeIndex,
-      int latitudeIndex) {
-    double longitude = media.getDouble(longitudeIndex);
-    double latitude = media.getDouble(latitudeIndex);
-    if (longitude > 0 || latitude > 0) {
-      WritableMap location = new WritableNativeMap();
-      location.putDouble("longitude", longitude);
-      location.putDouble("latitude", latitude);
-      node.putMap("location", location);
-    }
+      int dataIndex,
+      ExifInterface exif) {
+      // location details are no longer indexed for privacy reasons using string Media.LATITUDE, Media.LONGITUDE
+      // we manually obtain location metadata using ExifInterface#getLatLong(float[]).
+      // ExifInterface is added in API level 5
+      float[] imageCoordinates = new float[2];
+      boolean hasCoordinates = exif.getLatLong(imageCoordinates);
+      if (hasCoordinates) {
+        double longitude = imageCoordinates[1];
+        double latitude = imageCoordinates[0];
+        WritableMap location = new WritableNativeMap();
+        location.putDouble("longitude", longitude);
+        location.putDouble("latitude", latitude);
+        node.putMap("location", location);
+      }
   }
 }

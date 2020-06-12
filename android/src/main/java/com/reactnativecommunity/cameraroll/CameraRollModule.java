@@ -227,7 +227,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     int first = params.getInt("first");
     String after = params.hasKey("after") ? params.getString("after") : null;
     String groupName = params.hasKey("groupName") ? params.getString("groupName") : null;
-    Boolean includeExifTimestamp = params.hasKey("includeExifTimestamp") ? params.getBoolean("includeExifTimestamp") : null;
     String assetType = params.hasKey("assetType") ? params.getString("assetType") : ASSET_TYPE_PHOTOS;
     ReadableArray mimeTypes = params.hasKey("mimeTypes")
         ? params.getArray("mimeTypes")
@@ -240,7 +239,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
           groupName,
           mimeTypes,
           assetType,
-          includeExifTimestamp,
           promise)
           .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
   }
@@ -251,7 +249,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     private final @Nullable String mAfter;
     private final @Nullable String mGroupName;
     private final @Nullable ReadableArray mMimeTypes;
-    private final Boolean mIncludeExifTimestamp;
     private final Promise mPromise;
     private final String mAssetType;
 
@@ -262,7 +259,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         @Nullable String groupName,
         @Nullable ReadableArray mimeTypes,
         String assetType,
-        Boolean includeExifTimestamp,
         Promise promise) {
       super(context);
       mContext = context;
@@ -272,7 +268,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       mMimeTypes = mimeTypes;
       mPromise = promise;
       mAssetType = assetType;
-      mIncludeExifTimestamp = includeExifTimestamp;
     }
 
     @Override
@@ -333,7 +328,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
           mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get media");
         } else {
           try {
-            putEdges(resolver, media, response, mFirst, mIncludeExifTimestamp);
+            putEdges(resolver, media, response, mFirst);
             putPageInfo(media, response, mFirst);
           } finally {
             media.close();
@@ -365,8 +360,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       ContentResolver resolver,
       Cursor media,
       WritableMap response,
-      int limit,
-      Boolean includeExifTimestamp) {
+      int limit) {
     WritableArray edges = new WritableNativeArray();
     media.moveToFirst();
     int idIndex = media.getColumnIndex(Images.Media._ID);
@@ -382,7 +376,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap node = new WritableNativeMap();
       ExifInterface exif = getExifInterface(media, dataIndex);
       boolean imageInfoSuccess = exif != null &&
-          putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, includeExifTimestamp, exif);
+          putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif);
       if (imageInfoSuccess) {
         putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, dateTakenIndex);
         putLocationInfo(media, node, dataIndex, exif);
@@ -431,7 +425,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       int heightIndex,
       int dataIndex,
       int mimeTypeIndex,
-      Boolean includeExifTimestamp,
       ExifInterface exif) {
     WritableMap image = new WritableNativeMap();
     Uri photoUri = Uri.parse("file://" + media.getString(dataIndex));
@@ -501,18 +494,16 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     image.putDouble("width", width);
     image.putDouble("height", height);
     node.putMap("image", image);
-    if (includeExifTimestamp) {
-      try {
-        String exifTimestampString = exif.getAttribute("DateTime");
-        if (exifTimestampString != null) {
-          SimpleDateFormat sdf = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
-          Date d = sdf.parse(exifTimestampString);
-          node.putDouble("exif_timestamp", d.getTime());
-        }
-      } catch (ParseException e) {
-        FLog.e(ReactConstants.TAG, "Could not parse exifTimestamp for " + photoUri.toString(), e);
-        return false;
+    try {
+      String exifTimestampString = exif.getAttribute("DateTime");
+      if (exifTimestampString != null) {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
+        Date d = sdf.parse(exifTimestampString);
+        node.putDouble("exif_timestamp", d.getTime());
       }
+    } catch (ParseException e) {
+      FLog.e(ReactConstants.TAG, "Could not parse exifTimestamp for " + photoUri.toString(), e);
+      return false;
     }
     return true;
   }

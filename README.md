@@ -143,7 +143,6 @@ Returns a Promise with photo identifier objects from the local camera roll of th
   * `Videos`
   * `Photos` // default
 * `mimeTypes` : {Array} : Filter by mimetype (e.g. image/jpeg).
-* `includeExifTimestamp`: {boolean} : Include the exif timestamp for the photo // Android only
 
 Returns a Promise which when resolved will be of the following shape:
 

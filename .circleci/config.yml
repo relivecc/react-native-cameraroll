@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  rn: react-native-community/react-native@1.2.1
+  rn: react-native-community/react-native@4.0.4
 
 jobs:
   checkout_code:
@@ -54,13 +54,13 @@ workflows:
             - checkout_code
       - rn/android_build:
           name: android_debug_build
-          project_path: "example/android"
+          project_path: 'example/android'
           build_type: debug
           requires:
             - analyze
       - rn/android_build:
           name: android_release_build
-          project_path: "example/android"
+          project_path: 'example/android'
           build_type: release
           requires:
             - analyze

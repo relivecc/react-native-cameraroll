@@ -17,7 +17,6 @@
 
 #import <React/RCTBridge.h>
 #import <React/RCTConvert.h>
-#import <React/RCTImageLoader.h>
 #import <React/RCTLog.h>
 #import <React/RCTUtils.h>
 
@@ -43,27 +42,44 @@ RCT_ENUM_CONVERTER(PHAssetCollectionSubtype, (@{
 @implementation RCTConvert (PHFetchOptions)
 
 + (PHFetchOptions *)PHFetchOptionsFromMediaType:(NSString *)mediaType
+                                       fromTime:(NSUInteger)fromTime
+                                         toTime:(NSUInteger)toTime
 {
   // This is not exhaustive in terms of supported media type predicates; more can be added in the future
   NSString *const lowercase = [mediaType lowercaseString];
+  NSMutableArray *format = [NSMutableArray new];
+  NSMutableArray *arguments = [NSMutableArray new];
   
   if ([lowercase isEqualToString:@"photos"]) {
-    PHFetchOptions *const options = [PHFetchOptions new];
-    options.predicate = [NSPredicate predicateWithFormat:@"mediaType = %d", PHAssetMediaTypeImage];
-    return options;
+    [format addObject:@"mediaType = %d"];
+    [arguments addObject:@(PHAssetMediaTypeImage)];
   } else if ([lowercase isEqualToString:@"videos"]) {
-    PHFetchOptions *const options = [PHFetchOptions new];
-    options.predicate = [NSPredicate predicateWithFormat:@"mediaType = %d", PHAssetMediaTypeVideo];
-    return options;
+    [format addObject:@"mediaType = %d"];
+    [arguments addObject:@(PHAssetMediaTypeVideo)];
   } else {
     if (![lowercase isEqualToString:@"all"]) {
       RCTLogError(@"Invalid filter option: '%@'. Expected one of 'photos',"
                   "'videos' or 'all'.", mediaType);
     }
-    // This case includes the "all" mediatype
-    PHFetchOptions *const options = [PHFetchOptions new];
-    return options;
   }
+  
+  if (fromTime > 0) {
+    NSDate* fromDate = [NSDate dateWithTimeIntervalSince1970:fromTime/1000];
+    [format addObject:@"creationDate > %@"];
+    [arguments addObject:fromDate];
+  }
+  if (toTime > 0) {
+    NSDate* toDate = [NSDate dateWithTimeIntervalSince1970:toTime/1000];
+    [format addObject:@"creationDate <= %@"];
+    [arguments addObject:toDate];
+  }
+  
+  // This case includes the "all" mediatype
+  PHFetchOptions *const options = [PHFetchOptions new];
+  if ([format count] > 0) {
+    options.predicate = [NSPredicate predicateWithFormat:[format componentsJoinedByString:@" AND "] argumentArray:arguments];
+  }
+  return options;
 }
 
 @end
@@ -107,7 +123,6 @@ RCT_EXPORT_METHOD(saveToCameraRoll:(NSURLRequest *)request
   // URLs, `data:` URIs, etc. Video URLs are passed directly through for now; it may be nice to support
   // more ways of loading videos in the future.
   __block NSURL *inputURI = nil;
-  __block UIImage *inputImage = nil;
   __block PHFetchResult *photosAsset;
   __block PHAssetCollection *collection;
   __block PHObjectPlaceholder *placeholder;
@@ -123,7 +138,9 @@ RCT_EXPORT_METHOD(saveToCameraRoll:(NSURLRequest *)request
       if ([options[@"type"] isEqualToString:@"video"]) {
         assetRequest = [PHAssetChangeRequest creationRequestForAssetFromVideoAtFileURL:inputURI];
       } else {
-        assetRequest = [PHAssetChangeRequest creationRequestForAssetFromImage:inputImage];
+        NSData *data = [NSData dataWithContentsOfURL:inputURI];
+        UIImage *image = [UIImage imageWithData:data];
+        assetRequest = [PHAssetChangeRequest creationRequestForAssetFromImage:image];
       }
       placeholder = [assetRequest placeholderForCreatedAsset];
       if (![options[@"album"] isEqualToString:@""]) {
@@ -172,23 +189,33 @@ RCT_EXPORT_METHOD(saveToCameraRoll:(NSURLRequest *)request
   };
 
   void (^loadBlock)(void) = ^void() {
-    if ([options[@"type"] isEqualToString:@"video"]) {
-      inputURI = request.URL;
-      saveWithOptions();
-    } else {
-      [self.bridge.imageLoader loadImageWithURLRequest:request callback:^(NSError *error, UIImage *image) {
-        if (error) {
-          reject(kErrorUnableToLoad, nil, error);
-          return;
-        }
-
-        inputImage = image;
-        saveWithOptions();
-      }];
-    }
+    inputURI = request.URL;
+    saveWithOptions();
   };
 
   requestPhotoLibraryAccess(reject, loadBlock);
+}
+
+RCT_EXPORT_METHOD(getAlbums:(NSDictionary *)params
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+{
+  NSString *const mediaType = [params objectForKey:@"assetType"] ? [RCTConvert NSString:params[@"assetType"]] : @"All";
+  PHFetchOptions* options = [[PHFetchOptions alloc] init];
+  PHFetchResult<PHAssetCollection *> *const assetCollectionFetchResult = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum subtype:PHAssetCollectionSubtypeAny options:options];
+  NSMutableArray * result = [NSMutableArray new];
+  [assetCollectionFetchResult enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+    PHFetchOptions *const assetFetchOptions = [RCTConvert PHFetchOptionsFromMediaType:mediaType fromTime:0 toTime:0];
+    // Enumerate assets within the collection
+    PHFetchResult<PHAsset *> *const assetsFetchResult = [PHAsset fetchAssetsInAssetCollection:obj options:assetFetchOptions];
+    if (assetsFetchResult.count > 0) {
+      [result addObject:@{
+        @"title": [obj localizedTitle],
+        @"count": @(assetsFetchResult.count)
+      }];
+    }
+  }];
+  resolve(result);
 }
 
 static void RCTResolvePromise(RCTPromiseResolveBlock resolve,
@@ -225,7 +252,16 @@ RCT_EXPORT_METHOD(getPhotos:(NSDictionary *)params
   NSString *const groupName = [RCTConvert NSString:params[@"groupName"]];
   NSString *const groupTypes = [[RCTConvert NSString:params[@"groupTypes"]] lowercaseString];
   NSString *const mediaType = [RCTConvert NSString:params[@"assetType"]];
+  NSUInteger const fromTime = [RCTConvert NSInteger:params[@"fromTime"]];
+  NSUInteger const toTime = [RCTConvert NSInteger:params[@"toTime"]];
   NSArray<NSString *> *const mimeTypes = [RCTConvert NSStringArray:params[@"mimeTypes"]];
+  NSArray<NSString *> *const include = [RCTConvert NSStringArray:params[@"include"]];
+
+  BOOL __block includeFilename = [include indexOfObject:@"filename"] != NSNotFound;
+  BOOL __block includeFileSize = [include indexOfObject:@"fileSize"] != NSNotFound;
+  BOOL __block includeLocation = [include indexOfObject:@"location"] != NSNotFound;
+  BOOL __block includeImageSize = [include indexOfObject:@"imageSize"] != NSNotFound;
+  BOOL __block includePlayableDuration = [include indexOfObject:@"playableDuration"] != NSNotFound;
   
   // If groupTypes is "all", we want to fetch the SmartAlbum "all photos". Otherwise, all
   // other groupTypes values require the "album" collection type.
@@ -235,7 +271,19 @@ RCT_EXPORT_METHOD(getPhotos:(NSDictionary *)params
   PHAssetCollectionSubtype const collectionSubtype = [RCTConvert PHAssetCollectionSubtype:groupTypes];
   
   // Predicate for fetching assets within a collection
-  PHFetchOptions *const assetFetchOptions = [RCTConvert PHFetchOptionsFromMediaType:mediaType];
+  PHFetchOptions *const assetFetchOptions = [RCTConvert PHFetchOptionsFromMediaType:mediaType fromTime:fromTime toTime:toTime];
+  // We can directly set the limit if we guarantee every image fetched will be
+  // added to the output array within the `collectAsset` block
+  BOOL collectAssetMayOmitAsset = !!afterCursor || [mimeTypes count] > 0;
+  if (!collectAssetMayOmitAsset) {
+    // We set the fetchLimit to first + 1 so that `hasNextPage` will be set
+    // correctly:
+    // - If the user set `first: 10` and there are 11 photos, `hasNextPage`
+    //   will be set to true below inside of `collectAsset`
+    // - If the user set `first: 10` and there are 10 photos, `hasNextPage`
+    //   will not be set, as expected
+    assetFetchOptions.fetchLimit = first + 1;
+  }
   assetFetchOptions.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:NO]];
   
   BOOL __block foundAfter = NO;
@@ -247,7 +295,7 @@ RCT_EXPORT_METHOD(getPhotos:(NSDictionary *)params
   PHFetchOptions *const collectionFetchOptions = [PHFetchOptions new];
   collectionFetchOptions.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"endDate" ascending:NO]];
   if (groupName != nil) {
-    collectionFetchOptions.predicate = [NSPredicate predicateWithFormat:[NSString stringWithFormat:@"localizedTitle == '%@'", groupName]];
+    collectionFetchOptions.predicate = [NSPredicate predicateWithFormat:@"localizedTitle = %@", groupName];
   }
   
   BOOL __block stopCollections_;
@@ -256,34 +304,47 @@ RCT_EXPORT_METHOD(getPhotos:(NSDictionary *)params
   requestPhotoLibraryAccess(reject, ^{
     void (^collectAsset)(PHAsset*, NSUInteger, BOOL*) = ^(PHAsset * _Nonnull asset, NSUInteger assetIdx, BOOL * _Nonnull stopAssets) {
       NSString *const uri = [NSString stringWithFormat:@"ph://%@", [asset localIdentifier]];
-      if (afterCursor && !foundAfter) {
-        if ([afterCursor isEqualToString:uri]) {
-          foundAfter = YES;
-        }
-        return; // skip until we get to the first one
+      NSString *_Nullable originalFilename = NULL;
+      PHAssetResource *_Nullable resource = NULL;
+      NSNumber* fileSize = [NSNumber numberWithInt:0];
+      
+      if (includeFilename || includeFileSize || [mimeTypes count] > 0) {
+        // Get underlying resources of an asset - this includes files as well as details about edited PHAssets
+        // This is required for the filename and mimeType filtering
+        NSArray<PHAssetResource *> *const assetResources = [PHAssetResource assetResourcesForAsset:asset];
+        resource = [assetResources firstObject];
+        originalFilename = resource.originalFilename;
+        fileSize = [resource valueForKey:@"fileSize"];
       }
-
-      // Get underlying resources of an asset - this includes files as well as details about edited PHAssets
-      NSArray<PHAssetResource *> *const assetResources = [PHAssetResource assetResourcesForAsset:asset];
-      if (![assetResources firstObject]) {
-        return;
-      }
-      PHAssetResource *const _Nonnull resource = [assetResources firstObject];
-
-      if ([mimeTypes count] > 0) {
-        CFStringRef const uti = (__bridge CFStringRef _Nonnull)(resource.uniformTypeIdentifier);
-        NSString *const mimeType = (NSString *)CFBridgingRelease(UTTypeCopyPreferredTagWithClass(uti, kUTTagClassMIMEType));
-
-        BOOL __block mimeTypeFound = NO;
-        [mimeTypes enumerateObjectsUsingBlock:^(NSString * _Nonnull mimeTypeFilter, NSUInteger idx, BOOL * _Nonnull stop) {
-          if ([mimeType isEqualToString:mimeTypeFilter]) {
-            mimeTypeFound = YES;
-            *stop = YES;
+      
+      // WARNING: If you add any code to `collectAsset` that may skip adding an
+      // asset to the `assets` output array, you should do it inside this
+      // block and ensure the logic for `collectAssetMayOmitAsset` above is
+      // updated
+      if (collectAssetMayOmitAsset) {
+        if (afterCursor && !foundAfter) {
+          if ([afterCursor isEqualToString:uri]) {
+            foundAfter = YES;
           }
-        }];
+          return; // skip until we get to the first one
+        }
 
-        if (!mimeTypeFound) {
-          return;
+
+        if ([mimeTypes count] > 0 && resource) {
+          CFStringRef const uti = (__bridge CFStringRef _Nonnull)(resource.uniformTypeIdentifier);
+          NSString *const mimeType = (NSString *)CFBridgingRelease(UTTypeCopyPreferredTagWithClass(uti, kUTTagClassMIMEType));
+
+          BOOL __block mimeTypeFound = NO;
+          [mimeTypes enumerateObjectsUsingBlock:^(NSString * _Nonnull mimeTypeFilter, NSUInteger idx, BOOL * _Nonnull stop) {
+            if ([mimeType isEqualToString:mimeTypeFilter]) {
+              mimeTypeFound = YES;
+              *stop = YES;
+            }
+          }];
+
+          if (!mimeTypeFound) {
+            return;
+          }
         }
       }
 
@@ -306,35 +367,29 @@ RCT_EXPORT_METHOD(getPhotos:(NSDictionary *)params
                                                   ? @"audio"
                                                   : @"unknown")));
       CLLocation *const loc = asset.location;
-      NSString *const origFilename = resource.originalFilename;
 
-      // A note on isStored: in the previous code that used ALAssets, isStored
-      // was always set to YES, probably because iCloud-synced images were never returned (?).
-      // To get the "isStored" information and filename, we would need to actually request the
-      // image data from the image manager. Those operations could get really expensive and
-      // would definitely utilize the disk too much.
-      // Thus, this field is actually not reliable.
-      // Note that Android also does not return the `isStored` field at all.
       [assets addObject:@{
         @"node": @{
           @"type": assetMediaTypeLabel, // TODO: switch to mimeType?
           @"group_name": currentCollectionName,
           @"image": @{
               @"uri": uri,
-              @"filename": origFilename,
-              @"height": @([asset pixelHeight]),
-              @"width": @([asset pixelWidth]),
-              @"isStored": @YES, // this field doesn't seem to exist on android
-              @"playableDuration": @([asset duration]) // fractional seconds
+              @"filename": (includeFilename && originalFilename ? originalFilename : [NSNull null]),
+              @"height": (includeImageSize ? @([asset pixelHeight]) : [NSNull null]),
+              @"width": (includeImageSize ? @([asset pixelWidth]) : [NSNull null]),
+              @"fileSize": (includeFileSize ? fileSize : [NSNull null]),
+              @"playableDuration": (includePlayableDuration && asset.mediaType != PHAssetMediaTypeImage
+                                    ? @([asset duration]) // fractional seconds
+                                    : [NSNull null])
           },
           @"timestamp": @(asset.creationDate.timeIntervalSince1970),
-          @"location": (loc ? @{
+          @"location": (includeLocation && loc ? @{
               @"latitude": @(loc.coordinate.latitude),
               @"longitude": @(loc.coordinate.longitude),
               @"altitude": @(loc.altitude),
               @"heading": @(loc.course),
               @"speed": @(loc.speed), // speed in m/s
-            } : @{})
+            } : [NSNull null])
           }
       }];
     };
@@ -367,12 +422,17 @@ RCT_EXPORT_METHOD(deletePhotos:(NSArray<NSString *>*)assets
                   resolve:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 {
-  NSArray<NSURL *> *assets_ = [RCTConvert NSURLArray:assets];
-  [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
-    PHFetchResult<PHAsset *> *fetched =
-    [PHAsset fetchAssetsWithALAssetURLs:assets_ options:nil];
-    [PHAssetChangeRequest deleteAssets:fetched];
+  NSMutableArray *convertedAssets = [NSMutableArray array];
+  
+  for (NSString *asset in assets) {
+    [convertedAssets addObject: [asset stringByReplacingOccurrencesOfString:@"ph://" withString:@""]];
   }
+
+  [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+      PHFetchResult<PHAsset *> *fetched =
+        [PHAsset fetchAssetsWithLocalIdentifiers:convertedAssets options:nil];
+      [PHAssetChangeRequest deleteAssets:fetched];
+    }
   completionHandler:^(BOOL success, NSError *error) {
     if (success == YES) {
       resolve(@(success));

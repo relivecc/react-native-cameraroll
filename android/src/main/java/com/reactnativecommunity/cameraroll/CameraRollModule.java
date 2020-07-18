@@ -576,11 +576,11 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       int sizeIndex,
       int dataIndex,
       int mimeTypeIndex,
-      ExifInterface exif) {
       boolean includeFilename,
       boolean includeFileSize,
       boolean includeImageSize,
-      boolean includePlayableDuration) {
+      boolean includePlayableDuration,
+      ExifInterface exif) {
     WritableMap image = new WritableNativeMap();
     Uri photoUri = Uri.parse("file://" + media.getString(dataIndex));
     image.putString("uri", photoUri.toString());

@@ -587,8 +587,8 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     String mimeType = media.getString(mimeTypeIndex);
 
     boolean isVideo = mimeType != null && mimeType.startsWith("video");
-    boolean putImageSizeSuccess = putImageSize(resolver, media, image, widthIndex, heightIndex,
-        photoUri, isVideo, includeImageSize);
+    boolean putImageSizeSuccess = putImageSize(resolver, node, media, image, widthIndex, heightIndex,
+        photoUri, isVideo, includeImageSize, exif);
     boolean putPlayableDurationSuccess = putPlayableDuration(resolver, image, photoUri, isVideo,
         includePlayableDuration);
 
@@ -671,13 +671,15 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
 
   private static boolean putImageSize(
       ContentResolver resolver,
+      WritableMap node,
       Cursor media,
       WritableMap image,
       int widthIndex,
       int heightIndex,
       Uri photoUri,
       boolean isVideo,
-      boolean includeImageSize) {
+      boolean includeImageSize,
+      ExifInterface exif) {
     image.putNull("width");
     image.putNull("height");
 

@@ -17,6 +17,7 @@ import android.media.MediaScannerConnection;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.MediaStore.Images;
@@ -313,6 +314,8 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       }
       WritableMap response = new WritableNativeMap();
       ContentResolver resolver = mContext.getContentResolver();
+
+      String mediaQuery = Build.VERSION.SDK_INT >= 29 ? Images.Media.DATE_ADDED : Images.Media.DATE_TAKEN;
       // using LIMIT in the sortOrder is not explicitly supported by the SDK (which does not support
       // setting a limit at all), but it works because this specific ContentProvider is backed by
       // an SQLite DB and forwards parameters to it without doing any parsing / validation.
@@ -322,17 +325,9 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
             PROJECTION,
             selection.toString(),
             selectionArgs.toArray(new String[selectionArgs.size()]),
-            Images.Media.DATE_TAKEN + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT " +
+            mediaQuery + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT " +
                     (mFirst + 1)); // set LIMIT to first + 1 so that we know how to populate page_info
-        if (media != null && media.getCount() <= 0) {
-          media = resolver.query(
-              MediaStore.Files.getContentUri("external"),
-              PROJECTION,
-              selection.toString(),
-              selectionArgs.toArray(new String[selectionArgs.size()]),
-              Images.Media.DATE_ADDED + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT " +
-                      (mFirst + 1)); // set LIMIT to first + 1 so that we know how to populate page_info
-        } else if (media == null) {
+        if (media == null) {
           mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get media");
         } else {
           try {

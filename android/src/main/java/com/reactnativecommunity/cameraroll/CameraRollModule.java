@@ -315,7 +315,11 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap response = new WritableNativeMap();
       ContentResolver resolver = mContext.getContentResolver();
 
+      // TODO: Remove this when updating the project.
+      // DATE_TAKEN can result in images having a timestamp of zero on Android 10+, hence we use DATE_ADDED
+      // in that case.
       String mediaQuery = Build.VERSION.SDK_INT >= 29 ? Images.Media.DATE_ADDED : Images.Media.DATE_TAKEN;
+
       // using LIMIT in the sortOrder is not explicitly supported by the SDK (which does not support
       // setting a limit at all), but it works because this specific ContentProvider is backed by
       // an SQLite DB and forwards parameters to it without doing any parsing / validation.

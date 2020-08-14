@@ -18,6 +18,8 @@ declare namespace CameraRoll {
     | 'SavedPhotos';
 
   type AssetType = 'All' | 'Videos' | 'Photos';
+  
+  type ImageQueryProperty = 'date_added';
 
   interface GetPhotosParams {
     first: number;
@@ -26,6 +28,7 @@ declare namespace CameraRoll {
     groupName?: string;
     assetType?: AssetType;
     mimeTypes?: Array<string>;
+    additionalPropertyQuery?: ImageQueryProperty;
   }
 
   interface PhotoIdentifier {

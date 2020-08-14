@@ -232,6 +232,8 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     ReadableArray mimeTypes = params.hasKey("mimeTypes")
         ? params.getArray("mimeTypes")
         : null;
+    String additionalPropertyQuery = params.hasKey("additionalPropertyQuery") ?
+            params.getString("additionalPropertyQuery") : null;
 
     new GetMediaTask(
           getReactApplicationContext(),
@@ -240,6 +242,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
           groupName,
           mimeTypes,
           assetType,
+          additionalPropertyQuery,
           promise)
           .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
   }
@@ -250,6 +253,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     private final @Nullable String mAfter;
     private final @Nullable String mGroupName;
     private final @Nullable ReadableArray mMimeTypes;
+    private final @Nullable String mAdditionalPropertyQuery;
     private final Promise mPromise;
     private final String mAssetType;
 
@@ -259,6 +263,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         @Nullable String after,
         @Nullable String groupName,
         @Nullable ReadableArray mimeTypes,
+        @Nullable String additionalPropertyQuery,
         String assetType,
         Promise promise) {
       super(context);
@@ -269,6 +274,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       mMimeTypes = mimeTypes;
       mPromise = promise;
       mAssetType = assetType;
+      mAdditionalPropertyQuery = additionalPropertyQuery;
     }
 
     @Override
@@ -324,7 +330,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
             PROJECTION,
             selection.toString(),
             selectionArgs.toArray(new String[selectionArgs.size()]),
-            Images.Media.DATE_TAKEN + " DESC, " + Images.Media.DATE_ADDED + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT " +
+            Images.Media.DATE_TAKEN + " DESC, " + mAdditionalPropertyQuery + " DESC, " + Images.Media.DATE_ADDED + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT " +
                     (mFirst + 1)); // set LIMIT to first + 1 so that we know how to populate page_info
         if (media == null) {
           mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get media");

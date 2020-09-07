@@ -389,7 +389,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       boolean useDateAdded) {
     WritableArray edges = new WritableNativeArray();
     media.moveToFirst();
-    int idIndex = media.getColumnIndex(Images.Media._ID);
     int mimeTypeIndex = media.getColumnIndex(Images.Media.MIME_TYPE);
     int groupNameIndex = media.getColumnIndex(Images.Media.BUCKET_DISPLAY_NAME);
     int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_TAKEN);
@@ -404,10 +403,10 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       ExifInterface exif = getExifInterface(media, dataIndex);
       int timestamp = useDateAdded ? Math.max(dateAddedIndex, dateTakenIndex) : dateTakenIndex;
       boolean imageInfoSuccess = exif != null &&
-          putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif);
+          putImageInfo(resolver, media, node, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif);
       if (imageInfoSuccess) {
         putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, timestamp);
-        putLocationInfo(media, node, dataIndex, exif);
+        putLocationInfo(node, exif);
 
         edge.putMap("node", node);
         edges.pushMap(edge);
@@ -448,7 +447,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       ContentResolver resolver,
       Cursor media,
       WritableMap node,
-      int idIndex,
       int widthIndex,
       int heightIndex,
       int dataIndex,
@@ -537,9 +535,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
   }
 
   private static void putLocationInfo(
-      Cursor media,
       WritableMap node,
-      int dataIndex,
       ExifInterface exif) {
       // location details are no longer indexed for privacy reasons using string Media.LATITUDE, Media.LONGITUDE
       // we manually obtain location metadata using ExifInterface#getLatLong(float[]).

@@ -365,14 +365,14 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     }
   }
 
-  private static void putPageInfo(Cursor media, WritableMap response, int limit, boolean useDateAddedQuery) {
+  private static void putPageInfo(Cursor media, WritableMap response, int limit, boolean useDateAdded) {
     WritableMap pageInfo = new WritableNativeMap();
     pageInfo.putBoolean("has_next_page", limit < media.getCount());
     if (limit < media.getCount()) {
       media.moveToPosition(limit - 1);
       int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_TAKEN);
       int dateAddedIndex = media.getColumnIndex(Images.Media.DATE_ADDED);
-      int columnIndex = useDateAddedQuery ? Math.max(dateAddedIndex, dateTakenIndex)
+      int columnIndex = useDateAdded ? Math.max(dateAddedIndex, dateTakenIndex)
           : dateTakenIndex;
       pageInfo.putString(
           "end_cursor", 
@@ -386,7 +386,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       Cursor media,
       WritableMap response,
       int limit,
-      boolean useDateAddedQuery) {
+      boolean useDateAdded) {
     WritableArray edges = new WritableNativeArray();
     media.moveToFirst();
     int idIndex = media.getColumnIndex(Images.Media._ID);
@@ -402,7 +402,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap edge = new WritableNativeMap();
       WritableMap node = new WritableNativeMap();
       ExifInterface exif = getExifInterface(media, dataIndex);
-      int timestamp = useDateAddedQuery ? Math.max(dateAddedIndex, dateTakenIndex) : dateTakenIndex;
+      int timestamp = useDateAdded ? Math.max(dateAddedIndex, dateTakenIndex) : dateTakenIndex;
       boolean imageInfoSuccess = exif != null &&
           putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif);
       if (imageInfoSuccess) {

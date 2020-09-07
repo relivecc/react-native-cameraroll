@@ -330,10 +330,10 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       ContentResolver resolver = mContext.getContentResolver();
 
       // set LIMIT to first + 1 so that we know how to populate page_info
-      String sortQuery = mUseDateAddedQuery ? (Images.Media.DATE_ADDED + " DESC, ") : ""
-          + Images.Media.DATE_TAKEN + " DESC, " + Images.Media.DATE_MODIFIED
-              + " DESC LIMIT " + (mFirst + 1); 
-                  
+      String sortQuery = (mUseDateAddedQuery ? Images.Media.DATE_ADDED + " DESC, " : "")
+          + Images.Media.DATE_TAKEN + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT "
+              + (mFirst + 1);
+
       // using LIMIT in the sortOrder is not explicitly supported by the SDK (which
       // does not support setting a limit at all), but it works because this specific 
       // ContentProvider is backed by an SQLite DB and forwards parameters to it without 

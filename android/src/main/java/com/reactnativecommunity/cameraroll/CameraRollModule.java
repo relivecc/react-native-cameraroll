@@ -297,25 +297,28 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         selectionArgs.add(mGroupName);
       }
 
-      if (mAssetType.equals(ASSET_TYPE_PHOTOS)) {
-        selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " = "
-          + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE);
-      } else if (mAssetType.equals(ASSET_TYPE_VIDEOS)) {
-        selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " = "
-          + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO);
-      } else if (mAssetType.equals(ASSET_TYPE_ALL)) {
-        selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " IN ("
-          + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO + ","
-          + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE + ")");
-      } else {
-        mPromise.reject(
-          ERROR_UNABLE_TO_FILTER,
-          "Invalid filter option: '" + mAssetType + "'. Expected one of '"
-            + ASSET_TYPE_PHOTOS + "', '" + ASSET_TYPE_VIDEOS + "' or '" + ASSET_TYPE_ALL + "'."
-        );
-        return;
+      switch (mAssetType) {
+        case ASSET_TYPE_PHOTOS:
+          selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " = "
+              + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE);
+          break;
+        case ASSET_TYPE_VIDEOS:
+          selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " = "
+              + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO);
+          break;
+        case ASSET_TYPE_ALL:
+          selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " IN ("
+              + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO + ","
+              + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE + ")");
+          break;
+        default:
+          mPromise.reject(
+              ERROR_UNABLE_TO_FILTER,
+              "Invalid filter option: '" + mAssetType + "'. Expected one of '" + ASSET_TYPE_PHOTOS
+                  + "', '" + ASSET_TYPE_VIDEOS + "' or '" + ASSET_TYPE_ALL + "'."
+          );
+          return;
       }
-
 
       if (mMimeTypes != null && mMimeTypes.size() > 0) {
         selection.append(" AND " + Images.Media.MIME_TYPE + " IN (");
@@ -423,8 +426,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     Uri photoUri = Uri.parse("file://" + media.getString(dataIndex));
     File file = new File(media.getString(dataIndex));
     try {
-      ExifInterface exif = new ExifInterface(file.getPath());
-      return exif;
+      return new ExifInterface(file.getPath());
     } catch (IOException e) {
       FLog.e(ReactConstants.TAG, "Could not get exifTimestamp for " + photoUri.toString(), e);
       return null;

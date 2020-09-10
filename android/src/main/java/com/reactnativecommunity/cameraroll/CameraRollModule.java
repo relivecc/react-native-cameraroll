@@ -219,6 +219,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
    *            assetType (optional): chooses between either photos or videos from the camera roll.
    *            Valid values are "Photos" or "Videos". Defaults to photos.
    *          </li>
+   *          <li>
+   *            useDateAddedQuery (optional): allows for taking the 'date_added' property of images
+   *            into account. In Android 10+ the default 'date_taken' property has been replaced by
+   *            'date_added', resulting in possible 0 timestamps. This allows to counteract the
+   *            issue.
+   *          </li>
    *        </ul>
    * @param promise the Promise to be resolved when the photos are loaded; for a format of the
    *        parameters passed to this callback, see {@code getPhotosReturnChecker} in CameraRoll.js
@@ -284,7 +290,10 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       if (!TextUtils.isEmpty(mAfter)) {
         if (mUseDateAddedQuery) {
           selection.append(" AND (" + SELECTION_DATE_ADDED);
-          selectionArgs.add(mAfter);
+          // Technically not required, as `DATE_TAKEN` will most likely be zero
+          // and, as such, will already be selected.
+          String mAfterInSeconds = String.valueOf(Long.valueOf(mAfter) / 1000l);
+          selectionArgs.add(mAfterInSeconds);
           selection.append(" OR " + SELECTION_DATE_TAKEN + ")");
           selectionArgs.add(mAfter);
         } else {
@@ -373,12 +382,17 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     if (limit < media.getCount()) {
       media.moveToPosition(limit - 1);
       int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_TAKEN);
-      int dateAddedIndex = media.getColumnIndex(Images.Media.DATE_ADDED);
-      int columnIndex = useDateAdded ? Math.max(dateAddedIndex, dateTakenIndex)
-          : dateTakenIndex;
+      long dateTaken = media.getLong(dateTakenIndex);
+      long timestamp = dateTaken;
+      // If we want to use data_added and the date_taken timestamp equals 0.
+      if (useDateAdded && dateTaken <= 0) {
+        // Use date_taken multiplied by 1000 as we return time in ms.
+        int dateAddedIndex = media.getColumnIndex(Images.Media.DATE_ADDED);
+        timestamp = media.getLong(dateAddedIndex) * 1000l;
+      }  
       pageInfo.putString(
           "end_cursor", 
-          media.getString(columnIndex));
+          Long.toString(timestamp));
     }
     response.putMap("page_info", pageInfo);
   }
@@ -403,7 +417,13 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap edge = new WritableNativeMap();
       WritableMap node = new WritableNativeMap();
       ExifInterface exif = getExifInterface(media, dataIndex);
-      int timestamp = useDateAdded ? Math.max(dateAddedIndex, dateTakenIndex) : dateTakenIndex;
+      // `DATE_TAKEN` returns time in milliseconds.
+      double timestamp = media.getLong(dateTakenIndex) / 1000d;
+      // If we want to use data_added and the date_taken timestamp equals 0.
+      if (useDateAdded && media.getLong(dateTakenIndex) <= 0) {
+          // Use date_added. `DATE_ADDED` uses time in seconds.
+          timestamp = (double) media.getLong(dateAddedIndex);
+      }
       boolean imageInfoSuccess = exif != null &&
           putImageInfo(resolver, media, node, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif);
       if (imageInfoSuccess) {
@@ -438,10 +458,10 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap node,
       int mimeTypeIndex,
       int groupNameIndex,
-      int dateTakenIndex) {
+      double timestamp) {
     node.putString("type", media.getString(mimeTypeIndex));
     node.putString("group_name", media.getString(groupNameIndex));
-    node.putDouble("timestamp", media.getLong(dateTakenIndex) / 1000d);
+    node.putDouble("timestamp", timestamp);
   }
 
   private static boolean putImageInfo(

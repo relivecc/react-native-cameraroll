@@ -83,7 +83,10 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
 
   private static final String SELECTION_BUCKET = Images.Media.BUCKET_DISPLAY_NAME + " = ?";
   private static final String SELECTION_DATE_TAKEN = Images.Media.DATE_TAKEN + " < ?";
-  private static final String SELECTION_DATE_ADDED = Images.Media.DATE_ADDED + " < ?";
+  // NOTE: this may lead to duplicate results on subsequent queries.
+  // However, should only be an issue in case a user makes multiple pictures in a second
+  // AND has more than 100 pictures (current set limit in app).
+  private static final String SELECTION_DATE_ADDED = Images.Media.DATE_ADDED + " <= ?";
 
   public CameraRollModule(ReactApplicationContext reactContext) {
     super(reactContext);
@@ -290,12 +293,11 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       List<String> selectionArgs = new ArrayList<>();
       if (!TextUtils.isEmpty(mAfter)) {
         if (mUseDateAddedQuery) {
-          selection.append(" AND (" + SELECTION_DATE_ADDED);
-          // Technically not required, as `DATE_TAKEN` will most likely be zero
-          // and, as such, will already be selected.
+          selection.append(" AND (CASE WHEN " + Images.Media.DATE_TAKEN + " <= 0 THEN " 
+              + SELECTION_DATE_ADDED);
           String mAfterInSeconds = String.valueOf(Long.valueOf(mAfter) / 1000l);
           selectionArgs.add(mAfterInSeconds);
-          selection.append(" OR " + SELECTION_DATE_TAKEN + ")");
+          selection.append(" ELSE " + SELECTION_DATE_TAKEN + " END)");
           selectionArgs.add(mAfter);
         } else {
           selection.append(" AND " + SELECTION_DATE_TAKEN);
@@ -341,10 +343,16 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap response = new WritableNativeMap();
       ContentResolver resolver = mContext.getContentResolver();
 
-      // set LIMIT to first + 1 so that we know how to populate page_info
-      String sortQuery = (mUseDateAddedQuery ? Images.Media.DATE_ADDED + " DESC, " : "")
-          + Images.Media.DATE_TAKEN + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT "
+
+      String sortQuery = Images.Media.DATE_TAKEN + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT "
               + (mFirst + 1);
+
+      // We sort on date_added when date_taken appears to be invalid else on date_taken
+      // and finally on date_moddified. `date_added` is multiplied with 1000 in that case
+      // since it is measured in second as opposed to `date_taken`.
+      String sortQueryDateAdded = "(CASE WHEN " + Images.Media.DATE_TAKEN + "<=0 THEN " + Images.Media.DATE_ADDED
+              + "*1000 ELSE " + Images.Media.DATE_TAKEN + " END) DESC, "
+              + Images.Media.DATE_MODIFIED + " DESC LIMIT " + (mFirst + 1);
 
       // using LIMIT in the sortOrder is not explicitly supported by the SDK (which
       // does not support setting a limit at all), but it works because this specific 
@@ -356,7 +364,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
             PROJECTION,
             selection.toString(),
             selectionArgs.toArray(new String[selectionArgs.size()]),
-            sortQuery);
+            mUseDateAddedQuery ? sortQueryDateAdded : sortQuery);
         if (media == null) {
           mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get media");
         } else {

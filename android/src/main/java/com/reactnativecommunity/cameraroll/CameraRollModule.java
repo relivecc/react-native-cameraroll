@@ -24,7 +24,6 @@ import android.text.TextUtils;
 
 import com.facebook.common.logging.FLog;
 import com.facebook.react.bridge.GuardedAsyncTask;
-import com.facebook.react.bridge.JSApplicationIllegalArgumentException;
 import com.facebook.react.bridge.NativeModule;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -76,6 +75,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     Images.Media.MIME_TYPE,
     Images.Media.BUCKET_DISPLAY_NAME,
     Images.Media.DATE_TAKEN,
+    Images.Media.DATE_ADDED,
     MediaStore.MediaColumns.WIDTH,
     MediaStore.MediaColumns.HEIGHT,
     MediaStore.MediaColumns.DATA
@@ -83,6 +83,10 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
 
   private static final String SELECTION_BUCKET = Images.Media.BUCKET_DISPLAY_NAME + " = ?";
   private static final String SELECTION_DATE_TAKEN = Images.Media.DATE_TAKEN + " < ?";
+  // NOTE: this may lead to duplicate results on subsequent queries.
+  // However, should only be an issue in case a user makes multiple pictures in a second
+  // AND has more than 100 pictures (current set limit in app).
+  private static final String SELECTION_DATE_ADDED = Images.Media.DATE_ADDED + " <= ?";
 
   public CameraRollModule(ReactApplicationContext reactContext) {
     super(reactContext);
@@ -218,6 +222,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
    *            assetType (optional): chooses between either photos or videos from the camera roll.
    *            Valid values are "Photos" or "Videos". Defaults to photos.
    *          </li>
+   *          <li>
+   *            useDateAddedQuery (optional): allows for taking the 'date_added' property of images
+   *            into account. In Android 10+ the default 'date_taken' property has been replaced by
+   *            'date_added', resulting in possible 0 timestamps. This allows to counteract the
+   *            issue.
+   *          </li>
    *        </ul>
    * @param promise the Promise to be resolved when the photos are loaded; for a format of the
    *        parameters passed to this callback, see {@code getPhotosReturnChecker} in CameraRoll.js
@@ -228,9 +238,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     String after = params.hasKey("after") ? params.getString("after") : null;
     String groupName = params.hasKey("groupName") ? params.getString("groupName") : null;
     String assetType = params.hasKey("assetType") ? params.getString("assetType") : ASSET_TYPE_PHOTOS;
-    ReadableArray mimeTypes = params.hasKey("mimeTypes")
-        ? params.getArray("mimeTypes")
+    ReadableArray mimeTypes = params.hasKey("mimeTypes") 
+        ? params.getArray("mimeTypes") 
         : null;
+    boolean useDateDateAddedQuery = params.hasKey("useDateAddedQuery")
+        ? params.getBoolean("useDateAddedQuery")
+        : false;
 
     new GetMediaTask(
           getReactApplicationContext(),
@@ -239,6 +252,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
           groupName,
           mimeTypes,
           assetType,
+          useDateDateAddedQuery,
           promise)
           .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
   }
@@ -249,8 +263,9 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     private final @Nullable String mAfter;
     private final @Nullable String mGroupName;
     private final @Nullable ReadableArray mMimeTypes;
-    private final Promise mPromise;
     private final String mAssetType;
+    private final boolean mUseDateAddedQuery;
+    private final Promise mPromise;
 
     private GetMediaTask(
         ReactContext context,
@@ -259,6 +274,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         @Nullable String groupName,
         @Nullable ReadableArray mimeTypes,
         String assetType,
+        boolean useDateAddedQuery,
         Promise promise) {
       super(context);
       mContext = context;
@@ -266,8 +282,9 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       mAfter = after;
       mGroupName = groupName;
       mMimeTypes = mimeTypes;
-      mPromise = promise;
       mAssetType = assetType;
+      mUseDateAddedQuery = useDateAddedQuery;
+      mPromise = promise;
     }
 
     @Override
@@ -275,33 +292,45 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       StringBuilder selection = new StringBuilder("1");
       List<String> selectionArgs = new ArrayList<>();
       if (!TextUtils.isEmpty(mAfter)) {
-        selection.append(" AND " + SELECTION_DATE_TAKEN);
-        selectionArgs.add(mAfter);
+        if (mUseDateAddedQuery) {
+          selection.append(" AND (CASE WHEN " + Images.Media.DATE_TAKEN + " <= 0 THEN " 
+              + SELECTION_DATE_ADDED);
+          String mAfterInSeconds = String.valueOf(Long.valueOf(mAfter) / 1000l);
+          selectionArgs.add(mAfterInSeconds);
+          selection.append(" ELSE " + SELECTION_DATE_TAKEN + " END)");
+          selectionArgs.add(mAfter);
+        } else {
+          selection.append(" AND " + SELECTION_DATE_TAKEN);
+          selectionArgs.add(mAfter);
+        }
       }
       if (!TextUtils.isEmpty(mGroupName)) {
         selection.append(" AND " + SELECTION_BUCKET);
         selectionArgs.add(mGroupName);
       }
 
-      if (mAssetType.equals(ASSET_TYPE_PHOTOS)) {
-        selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " = "
-          + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE);
-      } else if (mAssetType.equals(ASSET_TYPE_VIDEOS)) {
-        selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " = "
-          + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO);
-      } else if (mAssetType.equals(ASSET_TYPE_ALL)) {
-        selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " IN ("
-          + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO + ","
-          + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE + ")");
-      } else {
-        mPromise.reject(
-          ERROR_UNABLE_TO_FILTER,
-          "Invalid filter option: '" + mAssetType + "'. Expected one of '"
-            + ASSET_TYPE_PHOTOS + "', '" + ASSET_TYPE_VIDEOS + "' or '" + ASSET_TYPE_ALL + "'."
-        );
-        return;
+      switch (mAssetType) {
+        case ASSET_TYPE_PHOTOS:
+          selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " = "
+              + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE);
+          break;
+        case ASSET_TYPE_VIDEOS:
+          selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " = "
+              + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO);
+          break;
+        case ASSET_TYPE_ALL:
+          selection.append(" AND " + MediaStore.Files.FileColumns.MEDIA_TYPE + " IN ("
+              + MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO + ","
+              + MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE + ")");
+          break;
+        default:
+          mPromise.reject(
+              ERROR_UNABLE_TO_FILTER,
+              "Invalid filter option: '" + mAssetType + "'. Expected one of '" + ASSET_TYPE_PHOTOS
+                  + "', '" + ASSET_TYPE_VIDEOS + "' or '" + ASSET_TYPE_ALL + "'."
+          );
+          return;
       }
-
 
       if (mMimeTypes != null && mMimeTypes.size() > 0) {
         selection.append(" AND " + Images.Media.MIME_TYPE + " IN (");
@@ -313,23 +342,35 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       }
       WritableMap response = new WritableNativeMap();
       ContentResolver resolver = mContext.getContentResolver();
-      // using LIMIT in the sortOrder is not explicitly supported by the SDK (which does not support
-      // setting a limit at all), but it works because this specific ContentProvider is backed by
-      // an SQLite DB and forwards parameters to it without doing any parsing / validation.
+
+
+      String sortQuery = Images.Media.DATE_TAKEN + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT "
+              + (mFirst + 1);
+
+      // We sort on date_added when date_taken appears to be invalid else on date_taken
+      // and finally on date_moddified. `date_added` is multiplied with 1000 in that case
+      // since it is measured in second as opposed to `date_taken`.
+      String sortQueryDateAdded = "(CASE WHEN " + Images.Media.DATE_TAKEN + "<=0 THEN " + Images.Media.DATE_ADDED
+              + "*1000 ELSE " + Images.Media.DATE_TAKEN + " END) DESC, "
+              + Images.Media.DATE_MODIFIED + " DESC LIMIT " + (mFirst + 1);
+
+      // using LIMIT in the sortOrder is not explicitly supported by the SDK (which
+      // does not support setting a limit at all), but it works because this specific 
+      // ContentProvider is backed by an SQLite DB and forwards parameters to it without 
+      // doing any parsing / validation.
       try {
         Cursor media = resolver.query(
             MediaStore.Files.getContentUri("external"),
             PROJECTION,
             selection.toString(),
             selectionArgs.toArray(new String[selectionArgs.size()]),
-            Images.Media.DATE_TAKEN + " DESC, " + Images.Media.DATE_MODIFIED + " DESC LIMIT " +
-                (mFirst + 1)); // set LIMIT to first + 1 so that we know how to populate page_info
+            mUseDateAddedQuery ? sortQueryDateAdded : sortQuery);
         if (media == null) {
           mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get media");
         } else {
           try {
-            putEdges(resolver, media, response, mFirst);
-            putPageInfo(media, response, mFirst);
+            putEdges(resolver, media, response, mFirst, mUseDateAddedQuery);
+            putPageInfo(media, response, mFirst, mUseDateAddedQuery);
           } finally {
             media.close();
             mPromise.resolve(response);
@@ -344,14 +385,23 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     }
   }
 
-  private static void putPageInfo(Cursor media, WritableMap response, int limit) {
+  private static void putPageInfo(Cursor media, WritableMap response, int limit, boolean useDateAdded) {
     WritableMap pageInfo = new WritableNativeMap();
     pageInfo.putBoolean("has_next_page", limit < media.getCount());
     if (limit < media.getCount()) {
       media.moveToPosition(limit - 1);
+      int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_TAKEN);
+      long dateTaken = media.getLong(dateTakenIndex);
+      long timestamp = dateTaken;
+      // If we want to use data_added and the date_taken timestamp equals 0.
+      if (useDateAdded && dateTaken <= 0) {
+        // Use date_taken multiplied by 1000 as we return time in ms.
+        int dateAddedIndex = media.getColumnIndex(Images.Media.DATE_ADDED);
+        timestamp = media.getLong(dateAddedIndex) * 1000l;
+      }  
       pageInfo.putString(
-          "end_cursor",
-          media.getString(media.getColumnIndex(Images.Media.DATE_TAKEN)));
+          "end_cursor", 
+          Long.toString(timestamp));
     }
     response.putMap("page_info", pageInfo);
   }
@@ -360,13 +410,14 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       ContentResolver resolver,
       Cursor media,
       WritableMap response,
-      int limit) {
+      int limit,
+      boolean useDateAdded) {
     WritableArray edges = new WritableNativeArray();
     media.moveToFirst();
-    int idIndex = media.getColumnIndex(Images.Media._ID);
     int mimeTypeIndex = media.getColumnIndex(Images.Media.MIME_TYPE);
     int groupNameIndex = media.getColumnIndex(Images.Media.BUCKET_DISPLAY_NAME);
     int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_TAKEN);
+    int dateAddedIndex = media.getColumnIndex(Images.Media.DATE_ADDED);
     int widthIndex = media.getColumnIndex(MediaStore.MediaColumns.WIDTH);
     int heightIndex = media.getColumnIndex(MediaStore.MediaColumns.HEIGHT);
     int dataIndex = media.getColumnIndex(MediaStore.MediaColumns.DATA);
@@ -375,11 +426,18 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap edge = new WritableNativeMap();
       WritableMap node = new WritableNativeMap();
       ExifInterface exif = getExifInterface(media, dataIndex);
+      // `DATE_TAKEN` returns time in milliseconds.
+      double timestamp = media.getLong(dateTakenIndex) / 1000d;
+      // If we want to use data_added and the date_taken timestamp equals 0.
+      if (useDateAdded && media.getLong(dateTakenIndex) <= 0) {
+          // Use date_added. `DATE_ADDED` uses time in seconds.
+          timestamp = (double) media.getLong(dateAddedIndex);
+      }
       boolean imageInfoSuccess = exif != null &&
-          putImageInfo(resolver, media, node, idIndex, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif);
+          putImageInfo(resolver, media, node, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif);
       if (imageInfoSuccess) {
-        putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, dateTakenIndex);
-        putLocationInfo(media, node, dataIndex, exif);
+        putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, timestamp);
+        putLocationInfo(node, exif);
 
         edge.putMap("node", node);
         edges.pushMap(edge);
@@ -397,8 +455,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     Uri photoUri = Uri.parse("file://" + media.getString(dataIndex));
     File file = new File(media.getString(dataIndex));
     try {
-      ExifInterface exif = new ExifInterface(file.getPath());
-      return exif;
+      return new ExifInterface(file.getPath());
     } catch (IOException e) {
       FLog.e(ReactConstants.TAG, "Could not get exifTimestamp for " + photoUri.toString(), e);
       return null;
@@ -410,17 +467,16 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap node,
       int mimeTypeIndex,
       int groupNameIndex,
-      int dateTakenIndex) {
+      double timestamp) {
     node.putString("type", media.getString(mimeTypeIndex));
     node.putString("group_name", media.getString(groupNameIndex));
-    node.putDouble("timestamp", media.getLong(dateTakenIndex) / 1000d);
+    node.putDouble("timestamp", timestamp);
   }
 
   private static boolean putImageInfo(
       ContentResolver resolver,
       Cursor media,
       WritableMap node,
-      int idIndex,
       int widthIndex,
       int heightIndex,
       int dataIndex,
@@ -509,9 +565,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
   }
 
   private static void putLocationInfo(
-      Cursor media,
       WritableMap node,
-      int dataIndex,
       ExifInterface exif) {
       // location details are no longer indexed for privacy reasons using string Media.LATITUDE, Media.LONGITUDE
       // we manually obtain location metadata using ExifInterface#getLatLong(float[]).

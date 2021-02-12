@@ -525,17 +525,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       WritableMap node = new WritableNativeMap();
       ExifInterface exif = getExifInterface(media, dataIndex);
       // `DATE_TAKEN` returns time in milliseconds.
-      ///// double timestamp = media.getLong(dateTakenIndex) / 1000d;
+      double timestamp = media.getLong(dateTakenIndex) / 1000d;
       // If we want to use data_added and the date_taken timestamp equals 0.
-      //// if (useDateAdded && media.getLong(dateTakenIndex) <= 0) {
+      if (useDateAdded && media.getLong(dateTakenIndex) <= 0) {
           // Use date_added. `DATE_ADDED` uses time in seconds.
-      ////    timestamp = (double) media.getLong(dateAddedIndex);
-      //// }
-      // boolean imageInfoSuccess = exif != null &&
-      //     putImageInfo(resolver, media, node, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif);
-      // if (imageInfoSuccess) {
-      //   putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, timestamp);
-      //   putLocationInfo(node, exif);
+          timestamp = (double) media.getLong(dateAddedIndex);
+      }
 
       boolean imageInfoSuccess = exif != null &&
           putImageInfo(resolver, media, node, widthIndex, heightIndex, sizeIndex, dataIndex,

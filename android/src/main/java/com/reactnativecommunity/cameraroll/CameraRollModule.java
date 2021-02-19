@@ -494,9 +494,11 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     WritableMap pageInfo = new WritableNativeMap();
     pageInfo.putBoolean("has_next_page", limit < media.getCount());
     if (limit < media.getCount()) {
+      int dateTakenIndex = media.getColumnIndex(Images.Media.DATE_TAKEN);
+      long dateTakenTimestamp = media.getLong(dateTakenIndex);
       pageInfo.putString(
         "end_cursor",
-        Integer.toString(offset + limit)
+        dateTakenTimestamp
       );
     }
     response.putMap("page_info", pageInfo);

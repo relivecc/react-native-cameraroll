@@ -401,7 +401,12 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         } else {
           try {
             putEdges(resolver, media, response, mFirst, mInclude);
-            putPageInfo(media, response, mFirst, !TextUtils.isEmpty(mAfter) ? Integer.parseInt(mAfter) : 0);
+            if(mAfter != null) {
+              Long mAfterInSeconds = Long.valueOf(mAfter) / 1000;
+              putPageInfo(media, response, mFirst, mAfterInSeconds.intValue());
+            } else {
+              putPageInfo(media, response, mFirst, 0);
+            }
           } finally {
             media.close();
             mPromise.resolve(response);
@@ -526,11 +531,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       ExifInterface exif = getExifInterface(media, dataIndex);
       // `DATE_TAKEN` returns time in milliseconds.
       double timestamp = media.getLong(dateTakenIndex) / 1000d;
-      // If we want to use data_added and the date_taken timestamp equals 0.
-      if (useDateAdded && media.getLong(dateTakenIndex) <= 0) {
-          // Use date_added. `DATE_ADDED` uses time in seconds.
-          timestamp = (double) media.getLong(dateAddedIndex);
-      }
 
       boolean imageInfoSuccess = exif != null &&
           putImageInfo(resolver, media, node, widthIndex, heightIndex, sizeIndex, dataIndex,
@@ -615,6 +615,18 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       image.putDouble("fileSize", media.getLong(sizeIndex));
     } else {
       image.putNull("fileSize");
+    }
+
+    try {
+      String exifTimestampString = exif.getAttribute("DateTime");
+      if (exifTimestampString != null) {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
+        Date d = sdf.parse(exifTimestampString);
+        node.putDouble("exif_timestamp", d.getTime());
+      }
+    } catch (ParseException e) {
+      FLog.e(ReactConstants.TAG, "Could not parse exifTimestamp for " + photoUri.toString(), e);
+      return false;
     }
 
     node.putMap("image", image);
@@ -759,17 +771,6 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     }
     image.putInt("width", width);
     image.putInt("height", height);
-    try {
-      String exifTimestampString = exif.getAttribute("DateTime");
-      if (exifTimestampString != null) {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
-        Date d = sdf.parse(exifTimestampString);
-        node.putDouble("exif_timestamp", d.getTime());
-      }
-    } catch (ParseException e) {
-      FLog.e(ReactConstants.TAG, "Could not parse exifTimestamp for " + photoUri.toString(), e);
-      return false;
-    }
     
     return success;
   }

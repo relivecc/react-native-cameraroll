@@ -244,6 +244,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     boolean useDateDateAddedQuery = params.hasKey("useDateAddedQuery")
         ? params.getBoolean("useDateAddedQuery")
         : false;
+    boolean useExifDateTimeOriginal = params.hasKey("useExifDateTimeOriginal") && params.getBoolean("useExifDateTimeOriginal");
 
     new GetMediaTask(
           getReactApplicationContext(),
@@ -253,6 +254,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
           mimeTypes,
           assetType,
           useDateDateAddedQuery,
+          useExifDateTimeOriginal,
           promise)
           .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
   }
@@ -265,6 +267,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     private final @Nullable ReadableArray mMimeTypes;
     private final String mAssetType;
     private final boolean mUseDateAddedQuery;
+    private final boolean mUseExifDateTimeOriginal;
     private final Promise mPromise;
 
     private GetMediaTask(
@@ -275,6 +278,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
         @Nullable ReadableArray mimeTypes,
         String assetType,
         boolean useDateAddedQuery,
+        boolean useExifDateTimeOriginal,
         Promise promise) {
       super(context);
       mContext = context;
@@ -284,6 +288,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       mMimeTypes = mimeTypes;
       mAssetType = assetType;
       mUseDateAddedQuery = useDateAddedQuery;
+      mUseExifDateTimeOriginal = useExifDateTimeOriginal;
       mPromise = promise;
     }
 
@@ -369,7 +374,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
           mPromise.reject(ERROR_UNABLE_TO_LOAD, "Could not get media");
         } else {
           try {
-            putEdges(resolver, media, response, mFirst, mUseDateAddedQuery);
+            putEdges(resolver, media, response, mFirst, mUseDateAddedQuery, mUseExifDateTimeOriginal);
             putPageInfo(media, response, mFirst, mUseDateAddedQuery);
           } finally {
             media.close();
@@ -411,7 +416,8 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       Cursor media,
       WritableMap response,
       int limit,
-      boolean useDateAdded) {
+      boolean useDateAdded,
+      boolean useExifDateTimeOriginal) {
     WritableArray edges = new WritableNativeArray();
     media.moveToFirst();
     int mimeTypeIndex = media.getColumnIndex(Images.Media.MIME_TYPE);
@@ -434,7 +440,7 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
           timestamp = (double) media.getLong(dateAddedIndex);
       }
       boolean imageInfoSuccess = exif != null &&
-          putImageInfo(resolver, media, node, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif);
+          putImageInfo(resolver, media, node, widthIndex, heightIndex, dataIndex, mimeTypeIndex, exif, useExifDateTimeOriginal);
       if (imageInfoSuccess) {
         putBasicNodeInfo(media, node, mimeTypeIndex, groupNameIndex, timestamp);
         putLocationInfo(node, exif);
@@ -481,7 +487,8 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
       int heightIndex,
       int dataIndex,
       int mimeTypeIndex,
-      ExifInterface exif) {
+      ExifInterface exif,
+      boolean useExifDateTimeOriginal) {
     WritableMap image = new WritableNativeMap();
     Uri photoUri = Uri.parse("file://" + media.getString(dataIndex));
     File file = new File(media.getString(dataIndex));
@@ -551,7 +558,13 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     image.putDouble("height", height);
     node.putMap("image", image);
     try {
-      String exifTimestampString = exif.getAttribute("DateTime");
+      String exifTimestampString = null;
+      if (useExifDateTimeOriginal && exif.hasAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)) {
+        exifTimestampString = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL);
+      } else {
+        exifTimestampString = exif.getAttribute(ExifInterface.TAG_DATETIME);
+      }
+      
       if (exifTimestampString != null) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
         Date d = sdf.parse(exifTimestampString);

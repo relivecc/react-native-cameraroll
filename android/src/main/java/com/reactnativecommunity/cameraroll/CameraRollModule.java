@@ -559,12 +559,18 @@ public class CameraRollModule extends ReactContextBaseJavaModule {
     node.putMap("image", image);
     try {
       String exifTimestampString = null;
-      if (useExifDateTimeOriginal && exif.hasAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)) {
-        exifTimestampString = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL);
-      } else {
-        exifTimestampString = exif.getAttribute(ExifInterface.TAG_DATETIME);
+
+      if (useExifDateTimeOriginal) {
+        String exifDateTimeOriginal = exif.getAttribute("DateTimeOriginal");
+        if (exifDateTimeOriginal != null) {
+          exifTimestampString = exifDateTimeOriginal;
+        }
       }
-      
+
+      if (exifTimestampString == null) {
+        exifTimestampString = exif.getAttribute("DateTime");
+      }
+
       if (exifTimestampString != null) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss");
         Date d = sdf.parse(exifTimestampString);
